@@ -1,5 +1,6 @@
 import os
 import json
+import math
 import requests
 import pandas as pd
 import gspread
@@ -9,7 +10,6 @@ from google.oauth2.service_account import Credentials
 
 
 URL = "https://7daysperformance.co.uk/api/v2/raffle-draws/GBP"
-
 SHEET_NAME = "Raffle Tracker"
 TAB_NAME = "7Days"
 
@@ -83,6 +83,13 @@ def transform(data):
     return pd.DataFrame(rows)
 
 
+def clean_for_google_sheets(df):
+    df = df.replace([float("inf"), float("-inf")], "")
+    df = df.where(pd.notnull(df), "")
+    df = df.astype(str)
+    return df
+
+
 def save_to_google_sheet(df):
     service_account_json = os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"]
     creds_dict = json.loads(service_account_json)
@@ -106,9 +113,7 @@ def save_to_google_sheet(df):
 
     worksheet.clear()
 
-    df = df.replace([float("inf"), float("-inf")], "")
-    df = df.where(pd.notnull(df), "")
-    df = df.astype(str)
+    df = clean_for_google_sheets(df)
 
     values = [df.columns.tolist()] + df.values.tolist()
 
