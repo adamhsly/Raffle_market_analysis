@@ -116,11 +116,14 @@ def save_to_google_sheet(df):
     existing_values = worksheet.get_all_values()
 
     if not existing_values:
-    values = [df.columns.tolist()] + df.values.tolist()
+        values = [df.columns.tolist()] + df.values.tolist()
     else:
         values = df.values.tolist()
 
-    worksheet.append_rows(values, value_input_option="USER_ENTERED")
+    worksheet.append_rows(
+        values, 
+        value_input_option="USER_ENTERED"
+    )
 
 
 def main():
