@@ -111,13 +111,16 @@ def save_to_google_sheet(df):
     else:
         worksheet = sh.add_worksheet(title=TAB_NAME, rows=1000, cols=50)
 
-    worksheet.clear()
-
     df = clean_for_google_sheets(df)
 
-    values = [df.columns.tolist()] + df.values.tolist()
+    existing_values = worksheet.get_all_values()
 
-    worksheet.update(values)
+    if not existing_values:
+    values = [df.columns.tolist()] + df.values.tolist()
+    else:
+        values = df.values.tolist()
+
+    worksheet.append_rows(values, value_input_option="USER_ENTERED")
 
 
 def main():
