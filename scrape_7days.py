@@ -1,6 +1,5 @@
 import os
 import json
-import math
 import requests
 import pandas as pd
 import gspread
@@ -121,7 +120,7 @@ def save_to_google_sheet(df):
         values = df.values.tolist()
 
     worksheet.append_rows(
-        values, 
+        values,
         value_input_option="USER_ENTERED"
     )
 
