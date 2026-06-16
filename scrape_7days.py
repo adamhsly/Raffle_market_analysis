@@ -103,6 +103,9 @@ def save_to_google_sheet(df):
         worksheet = sh.add_worksheet(title=TAB_NAME, rows=1000, cols=50)
 
     worksheet.clear()
+    df = df.replace([float("inf"), float("-inf")], "")
+    df = df.fillna("")
+
     worksheet.update([df.columns.tolist()] + df.values.tolist())
 
 
