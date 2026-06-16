@@ -34,7 +34,6 @@ def fetch_7days():
 
     response = requests.get(URL, params=params, headers=headers, timeout=30)
     response.raise_for_status()
-
     return response.json()
 
 
@@ -42,13 +41,13 @@ def transform(data):
     rows = []
 
     for item in data:
-        offer = item.get("offers", [{}])[0]
+        offer = item.get("offers", [{}])[0] if item.get("offers") else {}
 
         current_entries = item.get("current_entries") or 0
         max_entries = item.get("max_entries") or 0
-
         price = float(offer.get("price") or 0)
-        sold_percent = round((current_entries / max_entries) * 100, 2) if max_entries else None
+
+        sold_percent = round((current_entries / max_entries) * 100, 2) if max_entries else ""
         revenue_to_date = round(current_entries * price, 2)
 
         rows.append({
@@ -57,6 +56,7 @@ def transform(data):
             "id": item.get("id"),
             "slug": item.get("slug"),
             "draw_name": item.get("title"),
+            "subtitle": item.get("subtitle"),
             "ticket_price": price,
             "currency": offer.get("currency"),
             "start_at": item.get("start_at"),
@@ -68,9 +68,15 @@ def transform(data):
             "max_entries": max_entries,
             "sold_percent": sold_percent,
             "revenue_to_date": revenue_to_date,
+            "is_cash": item.get("is_cash"),
             "is_open": item.get("is_open"),
             "draw_method": item.get("draw_method"),
+            "instant_win_count": item.get("instant_win_count"),
+            "prize_count": item.get("prize_count"),
+            "default_tickets": item.get("default_tickets"),
+            "ticket_limit_per_user": item.get("ticket_limit_per_user"),
             "category_ids": ", ".join(item.get("category_ids", [])),
+            "thumbnail_url": item.get("thumbnail", {}).get("url"),
             "competition_url": f"https://7daysperformance.co.uk/competitions/{item.get('slug')}"
         })
 
@@ -86,11 +92,7 @@ def save_to_google_sheet(df):
         "https://www.googleapis.com/auth/drive"
     ]
 
-    creds = Credentials.from_service_account_info(
-        creds_dict,
-        scopes=scopes
-    )
-
+    creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     gc = gspread.authorize(creds)
 
     sh = gc.open(SHEET_NAME)
@@ -103,15 +105,23 @@ def save_to_google_sheet(df):
         worksheet = sh.add_worksheet(title=TAB_NAME, rows=1000, cols=50)
 
     worksheet.clear()
-    df = df.replace([float("inf"), float("-inf")], "")
-    df = df.fillna("")
 
-    worksheet.update([df.columns.tolist()] + df.values.tolist())
+    df = df.replace([float("inf"), float("-inf")], "")
+    df = df.where(pd.notnull(df), "")
+    df = df.astype(str)
+
+    values = [df.columns.tolist()] + df.values.tolist()
+
+    worksheet.update(values)
 
 
 def main():
     data = fetch_7days()
     df = transform(data)
+
+    if df.empty:
+        raise Exception("No competitions found from 7Days API")
+
     save_to_google_sheet(df)
 
     print(f"Saved {len(df)} competitions to Google Sheets")
