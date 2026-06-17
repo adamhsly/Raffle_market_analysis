@@ -1,4 +1,4 @@
-name: Scrape 7Days
+name: Scrape Raffle Sites
 
 on:
   schedule:
@@ -21,7 +21,12 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run scraper
+      - name: Run 7Days scraper
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: python scrape_7days.py
+
+      - name: Run WinnerStreak scraper
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python scrape_winnerstreak.py
