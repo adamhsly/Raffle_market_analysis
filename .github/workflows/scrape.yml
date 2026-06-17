@@ -2,8 +2,12 @@ name: Scrape Raffle Sites
 
 on:
   schedule:
-    - cron: "0 * * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
+
+concurrency:
+  group: raffle-scrape
+  cancel-in-progress: true
 
 jobs:
   scrape:
