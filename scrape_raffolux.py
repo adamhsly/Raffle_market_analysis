@@ -78,6 +78,7 @@ def transform(data):
             "revenue_to_date": revenue_to_date,
             "is_cash": "",
             "is_open": True,
+            "status": "live",
             "draw_method": item.get("drawType"),
             "instant_win_count": len(config.get("instants", [])),
             "prize_count": "",
@@ -126,12 +127,14 @@ def save_to_google_sheet(df):
     df = clean_for_google_sheets(df)
     values = df.values.tolist()
 
-    existing_values = worksheet.get_all_values()
+    headers = worksheet.row_values(1)
 
-    if not existing_values:
+    if not headers:
         worksheet.update([df.columns.tolist()] + values)
+        action = "Wrote headers and rows"
     else:
         worksheet.append_rows(values, value_input_option="USER_ENTERED")
+        action = "Appended rows"
 
     worksheet.resize(
         rows=len(worksheet.get_all_values()) + 100,
@@ -140,6 +143,7 @@ def save_to_google_sheet(df):
 
     print(f"Updated sheet: {SHEET_NAME}")
     print(f"Updated tab: {TAB_NAME}")
+    print(f"Action: {action}")
     print(f"Rows written/appended: {len(values)}")
 
 
@@ -152,7 +156,7 @@ def main():
 
     save_to_google_sheet(df)
 
-    print(f"Appended {len(df)} Raffolux raffles to Google Sheets")
+    print(f"Completed Raffolux: {len(df)} raffles")
 
 
 if __name__ == "__main__":
