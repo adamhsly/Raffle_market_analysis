@@ -27,15 +27,7 @@ def fetch_raffolux():
     if isinstance(data, list):
         return data
 
-    return data.get("data", data.get("raffles", data.get("results", [])))
-
-
-def first_value(item, keys, default=""):
-    for key in keys:
-        value = item.get(key)
-        if value is not None:
-            return value
-    return default
+    return data.get("data", [])
 
 
 def to_int(value):
@@ -56,47 +48,41 @@ def transform(data):
     rows = []
 
     for item in data:
-        current_entries = to_int(first_value(item, [
-            "current_entries", "entries", "tickets_sold", "sold", "sold_tickets"
-        ], 0))
-
-        max_entries = to_int(first_value(item, [
-            "max_entries", "total_entries", "tickets_total", "total_tickets", "ticket_count"
-        ], 0))
-
-        ticket_price = to_float(first_value(item, [
-            "ticket_price", "price", "entry_price", "ticketPrice"
-        ], 0))
+        current_entries = to_int(item.get("soldTicketCount"))
+        max_entries = to_int(item.get("totalTickets"))
+        ticket_price = to_float(item.get("pricePerTicket"))
 
         sold_percent = round((current_entries / max_entries) * 100, 2) if max_entries else ""
         revenue_to_date = round(current_entries * ticket_price, 2)
 
-        slug = first_value(item, ["slug", "url_slug"], "")
-        raffle_id = first_value(item, ["id", "raffle_id"], "")
+        media = item.get("media") or {}
+        config = item.get("configuration") or {}
 
         rows.append({
             "scraped_at": datetime.utcnow().isoformat(timespec="seconds"),
             "site": "Raffolux",
-            "id": raffle_id,
-            "slug": slug,
-            "draw_name": first_value(item, ["title", "name", "raffle_title"]),
-            "subtitle": first_value(item, ["subtitle", "description"]),
+            "id": item.get("id"),
+            "slug": item.get("slug"),
+            "draw_name": item.get("title"),
+            "subtitle": item.get("summary"),
             "ticket_price": ticket_price,
             "currency": "GBP",
-            "start_at": first_value(item, ["start_at", "start_date", "starts_at"]),
-            "end_at": first_value(item, ["end_at", "end_date", "closing_date", "ends_at"]),
-            "result_at": first_value(item, ["result_at", "draw_date"]),
-            "prize_value": first_value(item, ["prize_value", "value"]),
-            "cash_alternative": first_value(item, ["cash_alternative", "cash_alt"]),
+            "start_at": "",
+            "end_at": item.get("drawDate"),
+            "result_at": item.get("drawDate"),
+            "prize_value": item.get("prizeValue"),
+            "cash_alternative": item.get("prizeCashAlternativeValue"),
             "current_entries": current_entries,
             "max_entries": max_entries,
             "sold_percent": sold_percent,
             "revenue_to_date": revenue_to_date,
-            "is_open": first_value(item, ["is_open", "live", "status"]),
-            "draw_method": first_value(item, ["draw_method"]),
-            "category_ids": first_value(item, ["category", "categories"]),
-            "thumbnail_url": first_value(item, ["image", "thumbnail", "thumbnail_url"]),
-            "competition_url": f"https://raffolux.com/raffle/{slug}" if slug else ""
+            "is_open": True,
+            "draw_method": item.get("drawType"),
+            "category_ids": item.get("category"),
+            "featured": config.get("featured"),
+            "jackpot": config.get("jackpot"),
+            "thumbnail_url": media.get("thumbnail"),
+            "competition_url": f"https://raffolux.com/raffle/{item.get('slug')}"
         })
 
     return pd.DataFrame(rows)
