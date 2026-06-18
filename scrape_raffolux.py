@@ -76,8 +76,13 @@ def transform(data):
             "max_entries": max_entries,
             "sold_percent": sold_percent,
             "revenue_to_date": revenue_to_date,
+            "is_cash": "",
             "is_open": True,
             "draw_method": item.get("drawType"),
+            "instant_win_count": len(config.get("instants", [])),
+            "prize_count": "",
+            "default_tickets": config.get("startingTicketCount"),
+            "ticket_limit_per_user": item.get("maximumAllowedTickets"),
             "category_ids": item.get("category"),
             "featured": config.get("featured"),
             "jackpot": config.get("jackpot"),
@@ -109,12 +114,14 @@ def save_to_google_sheet(df):
 
     sh = gc.open(SHEET_NAME)
 
-    existing_tabs = [ws.title for ws in sh.worksheets()]
-
-    if TAB_NAME in existing_tabs:
+    try:
         worksheet = sh.worksheet(TAB_NAME)
-    else:
-        worksheet = sh.add_worksheet(title=TAB_NAME, rows=10000, cols=50)
+    except gspread.exceptions.WorksheetNotFound:
+        worksheet = sh.add_worksheet(
+            title=TAB_NAME,
+            rows=500,
+            cols=len(df.columns)
+        )
 
     df = clean_for_google_sheets(df)
     values = df.values.tolist()
@@ -125,6 +132,15 @@ def save_to_google_sheet(df):
         worksheet.update([df.columns.tolist()] + values)
     else:
         worksheet.append_rows(values, value_input_option="USER_ENTERED")
+
+    worksheet.resize(
+        rows=len(worksheet.get_all_values()) + 100,
+        cols=len(df.columns)
+    )
+
+    print(f"Updated sheet: {SHEET_NAME}")
+    print(f"Updated tab: {TAB_NAME}")
+    print(f"Rows written/appended: {len(values)}")
 
 
 def main():
