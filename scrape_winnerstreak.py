@@ -79,7 +79,7 @@ def transform(data):
         current_entries = to_int(item.get("ticketsSold"))
         max_entries = to_int(item.get("numberOfTickets"))
 
-        # WinnerStreak price is in pence
+        # WinnerStreak price is in pence, e.g. 99 = £0.99
         ticket_price = round(to_float(item.get("price")) / 100, 2)
 
         sold_percent = round((current_entries / max_entries) * 100, 2) if max_entries else ""
@@ -154,12 +154,14 @@ def save_to_google_sheet(df):
     df = clean_for_google_sheets(df)
     values = df.values.tolist()
 
-    existing_values = worksheet.get_all_values()
+    headers = worksheet.row_values(1)
 
-    if not existing_values:
+    if not headers:
         worksheet.update([df.columns.tolist()] + values)
+        action = "Wrote headers and rows"
     else:
         worksheet.append_rows(values, value_input_option="USER_ENTERED")
+        action = "Appended rows"
 
     worksheet.resize(
         rows=len(worksheet.get_all_values()) + 100,
@@ -168,6 +170,7 @@ def save_to_google_sheet(df):
 
     print(f"Updated sheet: {SHEET_NAME}")
     print(f"Updated tab: {TAB_NAME}")
+    print(f"Action: {action}")
     print(f"Rows written/appended: {len(values)}")
 
 
@@ -180,7 +183,7 @@ def main():
 
     save_to_google_sheet(df)
 
-    print(f"Appended {len(df)} WinnerStreak raffles to Google Sheets")
+    print(f"Completed WinnerStreak: {len(df)} raffles")
 
 
 if __name__ == "__main__":
