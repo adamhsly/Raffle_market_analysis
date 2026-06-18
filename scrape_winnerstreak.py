@@ -16,12 +16,11 @@ TAB_NAME = "WinnerStreak"
 def fetch_winnerstreak():
     all_items = []
     page = 1
-    per_page = 6
 
     while True:
         params = {
             "status": "live",
-            "perPage": per_page,
+            "perPage": 25,
             "orderBy": "end_date",
             "page": page
         }
@@ -34,28 +33,23 @@ def fetch_winnerstreak():
         response = requests.get(URL, params=params, headers=headers, timeout=30)
         response.raise_for_status()
 
-        data = response.json()
-        items = data.get("data", [])
+        payload = response.json()
+        items = payload.get("data", [])
 
         if not items:
             break
 
         all_items.extend(items)
 
-        if len(items) < per_page:
+        meta = payload.get("meta", {})
+        last_page = meta.get("last_page", page)
+
+        if page >= last_page:
             break
 
         page += 1
 
     return all_items
-
-
-def first_value(item, keys, default=""):
-    for key in keys:
-        value = item.get(key)
-        if value is not None:
-            return value
-    return default
 
 
 def to_int(value):
@@ -72,61 +66,56 @@ def to_float(value):
         return 0.0
 
 
+def category_names(categories):
+    if not categories:
+        return ""
+    return ", ".join([c.get("name", "") for c in categories if c.get("name")])
+
+
 def transform(data):
     rows = []
 
     for item in data:
-        current_entries = to_int(first_value(item, [
-            "current_entries",
-            "entries",
-            "tickets_sold",
-            "sold",
-            "sold_tickets"
-        ], 0))
+        current_entries = to_int(item.get("ticketsSold"))
+        max_entries = to_int(item.get("numberOfTickets"))
 
-        max_entries = to_int(first_value(item, [
-            "max_entries",
-            "total_entries",
-            "tickets_total",
-            "total_tickets",
-            "ticket_count"
-        ], 0))
-
-        ticket_price = to_float(first_value(item, [
-            "ticket_price",
-            "price",
-            "entry_price"
-        ], 0))
+        # WinnerStreak price is in pence
+        ticket_price = round(to_float(item.get("price")) / 100, 2)
 
         sold_percent = round((current_entries / max_entries) * 100, 2) if max_entries else ""
         revenue_to_date = round(current_entries * ticket_price, 2)
 
-        slug = first_value(item, ["slug"], "")
-        raffle_id = first_value(item, ["id"], "")
+        image = item.get("image") or {}
 
         rows.append({
             "scraped_at": datetime.utcnow().isoformat(timespec="seconds"),
             "site": "WinnerStreak",
-            "id": raffle_id,
-            "slug": slug,
-            "draw_name": first_value(item, ["title", "name", "raffle_title"]),
-            "subtitle": first_value(item, ["subtitle", "description"]),
+            "id": item.get("id"),
+            "slug": item.get("slug"),
+            "draw_name": item.get("title"),
+            "subtitle": item.get("description"),
             "ticket_price": ticket_price,
             "currency": "GBP",
-            "start_at": first_value(item, ["start_at", "start_date"]),
-            "end_at": first_value(item, ["end_at", "end_date", "closing_date"]),
-            "result_at": first_value(item, ["result_at", "draw_date"]),
-            "prize_value": first_value(item, ["prize_value", "value"]),
-            "cash_alternative": first_value(item, ["cash_alternative", "cash_alt"]),
+            "start_at": item.get("startDate"),
+            "end_at": item.get("endDate"),
+            "result_at": item.get("drawDate"),
+            "prize_value": item.get("prizeValue"),
+            "cash_alternative": item.get("cashAlternative"),
             "current_entries": current_entries,
             "max_entries": max_entries,
             "sold_percent": sold_percent,
             "revenue_to_date": revenue_to_date,
-            "is_open": first_value(item, ["is_open", "live", "status"]),
-            "draw_method": first_value(item, ["draw_method"]),
-            "category_ids": first_value(item, ["category", "categories"]),
-            "thumbnail_url": first_value(item, ["image", "thumbnail", "thumbnail_url"]),
-            "competition_url": f"https://www.thewinnerstreak.com/raffles/{slug}" if slug else ""
+            "is_cash": "",
+            "is_open": item.get("status") == "live",
+            "status": item.get("status"),
+            "draw_method": "auto" if item.get("autoDraw") else "manual",
+            "instant_win_count": item.get("instantWinsCount"),
+            "prize_count": len(item.get("prizes", [])),
+            "default_tickets": item.get("defaultTicketQuantity"),
+            "ticket_limit_per_user": item.get("maxTicketsPerUser"),
+            "category_ids": category_names(item.get("categories", [])),
+            "thumbnail_url": image.get("url"),
+            "competition_url": f"https://www.thewinnerstreak.com/raffles/{item.get('slug')}"
         })
 
     return pd.DataFrame(rows)
@@ -153,12 +142,14 @@ def save_to_google_sheet(df):
 
     sh = gc.open(SHEET_NAME)
 
-    existing_tabs = [ws.title for ws in sh.worksheets()]
-
-    if TAB_NAME in existing_tabs:
+    try:
         worksheet = sh.worksheet(TAB_NAME)
-    else:
-        worksheet = sh.add_worksheet(title=TAB_NAME, rows=10000, cols=50)
+    except gspread.exceptions.WorksheetNotFound:
+        worksheet = sh.add_worksheet(
+            title=TAB_NAME,
+            rows=500,
+            cols=len(df.columns)
+        )
 
     df = clean_for_google_sheets(df)
     values = df.values.tolist()
@@ -170,13 +161,22 @@ def save_to_google_sheet(df):
     else:
         worksheet.append_rows(values, value_input_option="USER_ENTERED")
 
+    worksheet.resize(
+        rows=len(worksheet.get_all_values()) + 100,
+        cols=len(df.columns)
+    )
+
+    print(f"Updated sheet: {SHEET_NAME}")
+    print(f"Updated tab: {TAB_NAME}")
+    print(f"Rows written/appended: {len(values)}")
+
 
 def main():
     data = fetch_winnerstreak()
     df = transform(data)
 
     if df.empty:
-        raise Exception("No live raffles found from WinnerStreak API")
+        raise Exception("No WinnerStreak raffles found")
 
     save_to_google_sheet(df)
 
